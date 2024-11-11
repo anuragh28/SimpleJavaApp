@@ -2,41 +2,68 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'simplejavaapp'
+        // Define environment variables, e.g., Docker Hub repository
+        DOCKER_IMAGE = "anurag3028/simplejavaapp"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/anuragh28/SimpleJavaApp.git'
+                // Pull the code from the GitHub repository
+                git url: 'https://github.com/anuragh28/SimpleJavaApp.git', branch: 'main'
             }
         }
 
         stage('Build') {
             steps {
+                // Run Maven to build the Java application
                 sh 'mvn clean package'
             }
         }
 
-        stage('Dockerize') {
+        stage('Test') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE}:latest ."
+                // Run Maven tests
+                sh 'mvn test'
             }
         }
 
-        stage('Run Docker Container') {
+        stage('Docker Build') {
             steps {
-                // Running the application on host port 8081 to avoid Jenkins conflict on port 8080
-                sh "docker run -d --name ${DOCKER_IMAGE} -p 8081:8080 ${DOCKER_IMAGE}:latest"
+                script {
+                    // Build a Docker image using Dockerfile
+                    sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ."
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                script {
+                    // Login to Docker Hub
+                    withCredentials([usernamePassword(credentialsId: 'docker_hub_credentials_id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    }
+                    // Push Docker image to Docker Hub
+                    sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                // Clean up Docker images after the build and push
+                sh "docker rmi ${DOCKER_IMAGE}:${BUILD_NUMBER}"
             }
         }
     }
 
     post {
-        always {
-            // Cleanup the container and image after pipeline run
-            sh "docker rm -f ${DOCKER_IMAGE} || true"
-            sh "docker rmi ${DOCKER_IMAGE}:latest || true"
+        success {
+            echo 'Build, Test, and Dockerize stages completed successfully!'
+        }
+        failure {
+            echo 'Build, Test, or Dockerize stages failed.'
         }
     }
 }
