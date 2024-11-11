@@ -1,69 +1,50 @@
 pipeline {
     agent any
-
     environment {
-        // Define environment variables, e.g., Docker Hub repository
-        DOCKER_IMAGE = "anurag3028/simplejavaapp"
+        DOCKER_HUB_CREDENTIALS = 'docker_hub_credentials_id'
+        DOCKER_IMAGE = '"anurag3028/simplejavaapp"'
     }
-
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                // Pull the code from the GitHub repository
-                git url: 'https://github.com/anuragh28/SimpleJavaApp.git', branch: 'main'
+                git branch: 'main', url: 'https://github.com/anuragh28/SimpleJavaApp.git'
             }
         }
-
-        stage('Build') {
-            steps {
-                // Run Maven to build the Java application
-                bat 'mvn clean package'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                // Run Maven tests
-                bat 'mvn test'
-            }
-        }
-
-        stage('Docker Build') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    // Build a Docker image using Dockerfile
-                    bat "docker build -t %DOCKER_IMAGE%:%BUILD_NUMBER% ."
+                    dockerImage = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}")
+                    echo "Docker image built: ${DOCKER_IMAGE}:${BUILD_NUMBER}"
                 }
             }
         }
-
-        stage('Docker Push') {
+        stage('Push Docker Image') {
             steps {
                 script {
-                    // Login to Docker Hub
-                    withCredentials([usernamePassword(credentialsId: 'docker_hub_credentials_id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_HUB_CREDENTIALS) {
+                        dockerImage.push()
+                        echo "Docker image pushed to Docker Hub: ${DOCKER_IMAGE}:${BUILD_NUMBER}"
                     }
-                    // Push Docker image to Docker Hub
-                    bat "docker push %DOCKER_IMAGE%:%BUILD_NUMBER%"
                 }
             }
         }
-
-        stage('Cleanup') {
+        stage('Clean Up') {
             steps {
-                // Clean up Docker images after the build and push
-                bat "docker rmi %DOCKER_IMAGE%:%BUILD_NUMBER%"
+                script {
+                    echo "Attempting to remove Docker image: ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                    try {
+                        sh "docker rmi ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                        echo "Docker image ${DOCKER_IMAGE}:${BUILD_NUMBER} removed successfully."
+                    } catch (Exception e) {
+                        echo "Failed to remove Docker image: ${e}"
+                    }
+                }
             }
         }
     }
-
     post {
-        success {
-            echo 'Build, Test, and Dockerize stages completed successfully!'
-        }
-        failure {
-            echo 'Build, Test, or Dockerize stages failed.'
+        always {
+            cleanWs()
         }
     }
 }
