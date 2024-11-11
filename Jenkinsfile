@@ -17,14 +17,14 @@ pipeline {
         stage('Build') {
             steps {
                 // Run Maven to build the Java application
-                sh 'mvn clean package'
+                bat 'mvn clean package'
             }
         }
 
         stage('Test') {
             steps {
                 // Run Maven tests
-                sh 'mvn test'
+                bat 'mvn test'
             }
         }
 
@@ -32,7 +32,7 @@ pipeline {
             steps {
                 script {
                     // Build a Docker image using Dockerfile
-                    sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ."
+                    bat "docker build -t %DOCKER_IMAGE%:%BUILD_NUMBER% ."
                 }
             }
         }
@@ -42,10 +42,10 @@ pipeline {
                 script {
                     // Login to Docker Hub
                     withCredentials([usernamePassword(credentialsId: 'docker_hub_credentials_id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                        bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
                     }
                     // Push Docker image to Docker Hub
-                    sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                    bat "docker push %DOCKER_IMAGE%:%BUILD_NUMBER%"
                 }
             }
         }
@@ -53,7 +53,7 @@ pipeline {
         stage('Cleanup') {
             steps {
                 // Clean up Docker images after the build and push
-                sh "docker rmi ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                bat "docker rmi %DOCKER_IMAGE%:%BUILD_NUMBER%"
             }
         }
     }
